@@ -127,6 +127,11 @@ type GatewayUserInfoPayload = {
   budget_duration?: string;
 };
 
+type ParsedGatewayUserInfoPayload = GatewayUserInfoPayload & {
+  max_budget: number;
+  spend: number;
+};
+
 /**
  * Recorded per-probe trace context. Local to this module — we expose only
  * the public `GatewayProbeTraceEntry` shape via the store. Wraps the
@@ -358,11 +363,12 @@ async function runPrimaryProbes(
   keyResult: PromiseSettledResult<GatewayKeyInfoWithUserId>;
   healthResult: PromiseSettledResult<GatewayHealth>;
 }> {
-  let [usageResult, keyResult, healthResult] = await Promise.allSettled([
+  const [initialUsageResult, keyResult, healthResult] = await Promise.allSettled([
     tracedProbe("user-info", "/user/info", () => fetchMonthlyUsage(baseUrl, apiKey), trace),
     tracedProbe("key-info", "/key/info", () => fetchKeyInfo(baseUrl, apiKey), trace),
     tracedProbe("health", "/health/readiness", () => fetchHealth(baseUrl, apiKey), trace),
   ] as const);
+  let usageResult = initialUsageResult;
 
   // Some gateway keys are now scoped to `/v2/user/info` instead of the
   // historical `/user/info`. `/key/info` carries the current user id, so when
@@ -373,7 +379,7 @@ async function runPrimaryProbes(
       tracedProbe(
         "user-info",
         "/v2/user/info?user_id=<current-user>",
-        () => fetchMonthlyUsageV2(baseUrl, apiKey, keyResult.value.userId!),
+        () => fetchMonthlyUsageV2(baseUrl, apiKey, keyResult.value.userId),
         trace,
       ),
     );
@@ -393,7 +399,7 @@ async function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> 
 function shouldTryV2UserInfoFallback(
   usageResult: PromiseSettledResult<GatewayMonthlyUsage>,
   keyResult: PromiseSettledResult<GatewayKeyInfoWithUserId>,
-): keyResult is PromiseFulfilledResult<GatewayKeyInfoWithUserId> {
+): keyResult is PromiseFulfilledResult<GatewayKeyInfoWithUserId & { userId: string }> {
   if (usageResult.status === "fulfilled" || keyResult.status !== "fulfilled") return false;
   if (!keyResult.value.userId) return false;
   const reason = usageResult.reason;
@@ -748,18 +754,23 @@ async function fetchMonthlyUsageV2(
   return monthlyUsageFromPayload(info);
 }
 
-function parseUserInfoPayload(raw: unknown, shape: "legacy" | "v2"): GatewayUserInfoPayload | null {
+function parseUserInfoPayload(
+  raw: unknown,
+  shape: "legacy" | "v2",
+): ParsedGatewayUserInfoPayload | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   const candidate = shape === "legacy" ? record.user_info : record;
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
   const info = candidate as GatewayUserInfoPayload;
-  return typeof info.max_budget === "number" && typeof info.spend === "number" ? info : null;
+  return typeof info.max_budget === "number" && typeof info.spend === "number"
+    ? { ...info, max_budget: info.max_budget, spend: info.spend }
+    : null;
 }
 
-function monthlyUsageFromPayload(info: GatewayUserInfoPayload): GatewayMonthlyUsage {
-  const maxBudget = info.max_budget!;
-  const spend = info.spend!;
+function monthlyUsageFromPayload(info: ParsedGatewayUserInfoPayload): GatewayMonthlyUsage {
+  const maxBudget = info.max_budget;
+  const spend = info.spend;
   return {
     maxBudget,
     spend,
