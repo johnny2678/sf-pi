@@ -18,7 +18,7 @@ describe("parseSlackMessageUrl", () => {
     expect(
       parseSlackMessageUrl(
         "https://example.slack.com/archives/D01ABCDEF23/p1700000000100001" +
-          "?thread_ts=1600000000.200002&cid=C01DIFFERENT",
+          "?thread_ts=1600000000.200002&cid=C01ABCEXAMPLE",
       ),
     ).toEqual({
       conversationId: "D01ABCDEF23",
@@ -28,9 +28,7 @@ describe("parseSlackMessageUrl", () => {
 
   it("accepts a trailing slash and preserves a future longer seconds component", () => {
     expect(
-      parseSlackMessageUrl(
-        "https://example-workspace.slack.com/archives/C01ABCDEF23/p11700000000100001/",
-      ),
+      parseSlackMessageUrl("https://example.slack.com/archives/C01ABCDEF23/p11700000000100001/"),
     ).toEqual({
       conversationId: "C01ABCDEF23",
       ts: "11700000000.100001",

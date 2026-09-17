@@ -12,7 +12,7 @@ export interface SlackMessageLocator {
 export class InvalidSlackMessageUrlError extends Error {
   constructor() {
     super(
-      "Invalid Slack message_url. Expected a canonical https://<workspace>.slack.com/archives/<conversation-id>/p<timestamp> permalink.",
+      "Invalid Slack message_url. Expected a canonical HTTPS Slack workspace message permalink.",
     );
     this.name = "InvalidSlackMessageUrlError";
   }
