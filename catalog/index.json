@@ -979,7 +979,7 @@
     "entry": "extensions/sf-slack/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 12475
+    "srcLoc": 12474
   },
   {
     "id": "sf-soql",

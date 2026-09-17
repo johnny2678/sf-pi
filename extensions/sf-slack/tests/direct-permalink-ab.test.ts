@@ -181,6 +181,13 @@ describe("direct permalink A/B behavior", () => {
     const directB = await runScenario({
       action: "thread",
       message_url: MESSAGE_URL,
+      // Reproduce Pi's eager tool-argument shape: omitted optional strings can
+      // arrive as empty placeholders and must not conflict with message_url.
+      channel: "",
+      ts: "",
+      query: "",
+      oldest: "",
+      latest: "",
       fields: "full",
       limit: 25,
       cursor: "cursor-example",

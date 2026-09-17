@@ -197,9 +197,13 @@ export function registerSlackTool(pi: ExtensionAPI): void {
       }
 
       if (action === "thread") {
-        const messageUrl = params.message_url;
-        const hasMessageUrl = messageUrl !== undefined;
-        if (hasMessageUrl && (params.channel !== undefined || params.ts !== undefined)) {
+        // Pi's eager tool arguments can materialize omitted optional strings as
+        // empty values. Normalize before enforcing the locator XOR so a direct
+        // message_url is not rejected by blank channel/ts placeholders.
+        const messageUrl = params.message_url?.trim();
+        const channel = params.channel?.trim();
+        const ts = params.ts?.trim();
+        if (messageUrl && (channel || ts)) {
           return {
             content: [
               {
@@ -215,7 +219,7 @@ export function registerSlackTool(pi: ExtensionAPI): void {
         let messageTs: string;
         let directMessageUrl = false;
 
-        if (hasMessageUrl) {
+        if (messageUrl) {
           try {
             const locator = parseSlackMessageUrl(messageUrl);
             conversationId = locator.conversationId;
@@ -233,7 +237,7 @@ export function registerSlackTool(pi: ExtensionAPI): void {
             };
           }
         } else {
-          if (!params.channel || !params.ts) {
+          if (!channel || !ts) {
             return {
               content: [
                 {
@@ -245,15 +249,10 @@ export function registerSlackTool(pi: ExtensionAPI): void {
             };
           }
 
-          const resolvedChannel = await resolveChannelParam(
-            ctx,
-            auth.token,
-            params.channel,
-            signal,
-          );
+          const resolvedChannel = await resolveChannelParam(ctx, auth.token, channel, signal);
           if ("result" in resolvedChannel) return resolvedChannel.result;
           conversationId = resolvedChannel.id;
-          messageTs = params.ts;
+          messageTs = ts;
         }
 
         const apiParams: Record<string, string | number | undefined> = {
