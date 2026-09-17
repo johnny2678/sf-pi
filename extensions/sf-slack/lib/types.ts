@@ -451,6 +451,12 @@ export const SlackParams = Type.Object({
   channel: Type.Optional(
     Type.String({ description: "Channel ID, e.g. C123... (for thread, history, permalink)" }),
   ),
+  message_url: Type.Optional(
+    Type.String({
+      description:
+        "Canonical Slack message permalink for thread reads. Use this instead of channel + ts when the user supplies a direct Slack URL.",
+    }),
+  ),
   ts: Type.Optional(
     Type.String({
       description:

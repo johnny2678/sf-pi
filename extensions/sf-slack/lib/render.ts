@@ -43,12 +43,14 @@ import type { SlackReaction, StructuredMatch, StructuredMessage } from "./types.
 import { getPreferences } from "./preferences.ts";
 import { resolveChannelNameFromCache, resolveUserNameFromCache } from "./api.ts";
 import { shortcodeToGlyph } from "./emoji.ts";
+import { parseSlackMessageUrl } from "./message-url.ts";
 
 interface SlackToolCallArgs {
   action?: string;
   query?: string;
   limit?: number;
   channel?: string;
+  message_url?: string;
   ts?: string;
   oldest?: string;
   latest?: string;
@@ -370,8 +372,17 @@ export function renderCall(args: SlackToolCallArgs, theme: Theme): Text {
         theme,
       );
     case "thread": {
-      const when = friendlyTime(args.ts);
-      const channelLabel = formatChannelLabel(args.channel);
+      let when = friendlyTime(args.ts);
+      let channelLabel = formatChannelLabel(args.channel);
+      if (args.message_url) {
+        channelLabel = "direct permalink";
+        try {
+          when = friendlyTime(parseSlackMessageUrl(args.message_url).ts);
+        } catch {
+          // Execution returns the actionable validation error. Keep rendering
+          // bounded and avoid echoing a malformed or private URL into the TUI.
+        }
+      }
       const summary = when ? `${channelLabel} · ${when}` : channelLabel;
       return callLabel(
         `${ICON_THREAD} Slack Thread`,

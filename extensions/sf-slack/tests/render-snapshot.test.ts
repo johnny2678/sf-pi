@@ -194,6 +194,20 @@ describe("renderResult visual snapshots", () => {
     );
   });
 
+  it("renderCall: direct permalink stays compact and hides the URL", () => {
+    const text = renderCall(
+      {
+        action: "thread",
+        message_url:
+          "https://example.slack.com/archives/D01ABCDEF23/p1700000000100001?thread_ts=1700000000.100001",
+      },
+      passthroughTheme,
+    );
+    expect(renderToString(text)).toMatchInlineSnapshot(
+      `"💬 Slack Thread direct permalink · Nov 14 · 10:13 PM"`,
+    );
+  });
+
   it("renderCall: history summary", () => {
     const text = renderCall(
       { action: "history", channel: CHANNEL_ID, oldest: "1", latest: "2" },

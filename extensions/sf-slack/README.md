@@ -27,6 +27,12 @@ when needed. Relative dates should pass through `slack_time_range`; fuzzy
 entities should pass through `slack_resolve`. Low-confidence matches require
 clarification instead of silently broadening or choosing a target.
 
+For an exact message link supplied by the user, call `slack` with
+`action: "thread"` and `message_url`. SF Slack strictly parses canonical
+workspace message permalinks and sends the resulting conversation ID and
+timestamp directly to Slack's read endpoint. This path does not use fuzzy
+channel resolution; `channel` + `ts` remains available for existing callers.
+
 ## Commands
 
 | Command                | Purpose                                                |

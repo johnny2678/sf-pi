@@ -17,6 +17,7 @@ Tools and their supporting modules follow a **one-file-per-concern** split:
 | Tool / responsibility                | Tool file                            | Supporting lib                                      |
 | ------------------------------------ | ------------------------------------ | --------------------------------------------------- |
 | `slack` (search, thread, history, …) | `lib/tools.ts`                       | `lib/api.ts`, `lib/search-plan.ts`, `lib/format.ts` |
+| Direct Slack permalink parsing       | `lib/message-url.ts`                 | —                                                   |
 | `slack_research`                     | `lib/research-tool.ts`               | `lib/search-plan.ts`, `lib/resolve.ts`              |
 | `slack_resolve`                      | `lib/resolve-tool.ts`                | `lib/resolve.ts`                                    |
 | `slack_time_range`                   | `lib/time-range-tool.ts`             | `lib/time-range.ts`                                 |
@@ -88,7 +89,10 @@ Tools and their supporting modules follow a **one-file-per-concern** split:
 
 Every read-style tool that turns a fuzzy channel or user reference into an ID must
 route through `requireConfirmedChannel` / `requireConfirmedUser` in
-`lib/recipient-confirm.ts`. `slack_send` is the exception: it resolves candidates
+`lib/recipient-confirm.ts`. A strictly parsed `slack` thread `message_url` is an
+exact locator rather than fuzzy recipient resolution: it calls the requested
+read directly and lets Slack validate access/existence without a selection
+prompt. `slack_send` is the other exception: it resolves candidates
 itself and folds recipient confidence/alternates into the final send confirmation
 so normal sends do not show two separate dialogs. The shared helper remains the
 single source of truth for:
@@ -99,7 +103,8 @@ single source of truth for:
 - headless-mode loud-failure with the candidate list in the error.
 
 Do not reintroduce ad-hoc `resolveChannelParam` / `resolveUserParam`
-helpers in new read tool files; delegate to the shared helper. For
+helpers in new read tool files; delegate fuzzy references to the shared helper.
+Do not extend the direct-permalink exception to raw IDs or fuzzy names. For
 `slack_send`, keep recipient review inside the single final confirmation rather
 than adding a separate select dialog. The `resolveChannel` / `resolveUser`
 primitives in `lib/resolve.ts` are intentionally one layer below — they perform

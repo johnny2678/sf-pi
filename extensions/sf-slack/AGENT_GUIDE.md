@@ -6,9 +6,10 @@ Use SF Slack for Slack research, thread/history lookup, channel/user/file/canvas
 
 1. Use `slack_time_range` for relative dates; pass its boundaries through unchanged.
 2. Use `slack_resolve` for fuzzy channels or people. Confidence below 0.85 requires clarification.
-3. Prefer `slack_research` for natural-language research and strict-to-broad query fallback.
-4. Start with preview or summary fields. Fetch full messages/threads only for high-value results.
-5. Use thread context when `reply_count` indicates discussion.
+3. When the user supplies a canonical Slack message permalink, preserve it in `slack` thread `message_url`; do not reduce it to a raw channel ID and timestamp.
+4. Prefer `slack_research` for natural-language research and strict-to-broad query fallback.
+5. Start with preview or summary fields. Fetch full messages/threads only for high-value results.
+6. Use thread context when `reply_count` indicates discussion.
 
 ## Writes
 

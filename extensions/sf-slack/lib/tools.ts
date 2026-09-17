@@ -46,6 +46,7 @@ import {
 import { renderCall, renderResult } from "./render.ts";
 import { buildSlackTextResult, SLACK_OUTPUT_DESCRIPTION_SUFFIX } from "./truncation.ts";
 import { requireConfirmedChannel } from "./recipient-confirm.ts";
+import { parseSlackMessageUrl } from "./message-url.ts";
 import type { FieldsMode } from "./format.ts";
 import { readEffectiveSfPiDisplaySettings } from "../../../lib/common/display/settings.ts";
 import type { SfPiDisplayProfile } from "../../../lib/common/display/types.ts";
@@ -102,6 +103,7 @@ export function registerSlackTool(pi: ExtensionAPI): void {
     // parameters so the flat Guidelines section does not repeat the same routing rule.
     promptGuidelines: [
       "Prefer slack_research for natural-language research, slack_resolve for fuzzy entities, and slack_time_range for relative dates before lower-level Slack reads.",
+      "When the user supplies a canonical Slack message permalink, preserve it in thread.message_url instead of extracting channel + ts; the exact URL path avoids fuzzy recipient resolution.",
       "Start with summary/preview fields and fetch full messages or threads only for high-value results.",
       "Read extensions/sf-slack/AGENT_GUIDE.md for auth recovery, research ordering, durable-write confirmation, and public-artifact safety.",
     ],
@@ -195,21 +197,68 @@ export function registerSlackTool(pi: ExtensionAPI): void {
       }
 
       if (action === "thread") {
-        if (!params.channel || !params.ts) {
+        const messageUrl = params.message_url;
+        const hasMessageUrl = messageUrl !== undefined;
+        if (hasMessageUrl && (params.channel !== undefined || params.ts !== undefined)) {
           return {
             content: [
-              { type: "text", text: 'The "thread" action requires "channel" and "ts" parameters.' },
+              {
+                type: "text",
+                text: 'The "thread" action accepts either "message_url" or "channel" + "ts", not both.',
+              },
             ],
-            details: { ok: false, action, reason: "missing_params" },
+            details: { ok: false, action, reason: "conflicting_locators" },
           };
         }
 
-        const resolvedChannel = await resolveChannelParam(ctx, auth.token, params.channel, signal);
-        if ("result" in resolvedChannel) return resolvedChannel.result;
+        let conversationId: string;
+        let messageTs: string;
+        let directMessageUrl = false;
+
+        if (hasMessageUrl) {
+          try {
+            const locator = parseSlackMessageUrl(messageUrl);
+            conversationId = locator.conversationId;
+            messageTs = locator.ts;
+            directMessageUrl = true;
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: error instanceof Error ? error.message : "Invalid Slack message_url.",
+                },
+              ],
+              details: { ok: false, action, reason: "invalid_message_url" },
+            };
+          }
+        } else {
+          if (!params.channel || !params.ts) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: 'The "thread" action requires either "message_url" or both "channel" and "ts".',
+                },
+              ],
+              details: { ok: false, action, reason: "missing_params" },
+            };
+          }
+
+          const resolvedChannel = await resolveChannelParam(
+            ctx,
+            auth.token,
+            params.channel,
+            signal,
+          );
+          if ("result" in resolvedChannel) return resolvedChannel.result;
+          conversationId = resolvedChannel.id;
+          messageTs = params.ts;
+        }
 
         const apiParams: Record<string, string | number | undefined> = {
-          channel: resolvedChannel.id,
-          ts: params.ts,
+          channel: conversationId,
+          ts: messageTs,
           limit: clampLimit(params.limit, DEFAULT_HISTORY_LIMIT, 200),
         };
         if (params.cursor) apiParams.cursor = params.cursor;
@@ -236,9 +285,12 @@ export function registerSlackTool(pi: ExtensionAPI): void {
           messages,
           signal,
         );
-        // Best-effort channel name resolution for the render header.
-        // Fire-and-forget: failures are cached as the raw ID so we don't retry.
-        void resolveChannelName(auth.token, resolvedChannel.id, signal).catch(() => {});
+        // A direct permalink's read is its channel validation. Keep the legacy
+        // name fill only for resolved channel refs; otherwise it would re-add
+        // the conversations.info preflight this exact-locator path avoids.
+        if (!directMessageUrl) {
+          void resolveChannelName(auth.token, conversationId, signal).catch(() => {});
+        }
 
         const fields = resolveFields(params.fields, ctx.cwd);
         let text = formatMessages(messages, userNames, fields);
@@ -253,9 +305,10 @@ export function registerSlackTool(pi: ExtensionAPI): void {
             ok: true,
             action,
             count: messages.length,
-            channel: resolvedChannel.id,
+            channel: conversationId,
             channel_ref: params.channel,
-            ts: params.ts,
+            ts: messageTs,
+            ...(directMessageUrl ? { locator: "message_url" } : {}),
             has_more: hasMore,
             next_cursor: nextCursor,
             fields,
